@@ -1,0 +1,8 @@
+{
+  "name": "WAZA-ZONE — AI Visual Storytelling OS",
+  "description": "The production-grade creative OS for Mangaka, Webtoon auteurs, and serialized comic studios. Zero character drift with persistent visual DNA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

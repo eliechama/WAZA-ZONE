@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WAZA-ZONE — AI Visual Storytelling OS</title>
+    <meta name="description" content="The production-grade creative OS for Mangaka, Webtoon auteurs, and serialized comic studios. Zero character drift with persistent visual DNA." />
+    
+    <!-- OpenGraph -->
+    <meta property="og:title" content="WAZA-ZONE — AI Visual Storytelling OS" />
+    <meta property="og:description" content="Persistent visual DNA, vector speech balloons, multi-format print export, and serverless AI pipelines." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Sandbox/Polyfill Protection: Prevent 'Cannot set property fetch of #<Window> which has only a getter' -->
+    <script>
+      (function() {
+        try {
+          if (typeof window !== 'undefined') {
+            // 1. Intercept and suppress the 'fetch' getter error at window level
+            var isFetchGetterError = function(msg) {
+              return msg && typeof msg === 'string' &&
+                msg.indexOf('fetch') !== -1 &&
+                msg.indexOf('getter') !== -1;
+            };
+
+            window.addEventListener('error', function(event) {
+              var msg = event.message || (event.error && event.error.message) || '';
+              if (isFetchGetterError(msg)) {
+                if (event.preventDefault) event.preventDefault();
+                if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+                if (event.stopPropagation) event.stopPropagation();
+                return true;
+              }
+            }, true);
+
+            var prevOnError = window.onerror;
+            window.onerror = function(msg, source, lineno, colno, error) {
+              var errMsg = msg || (error && error.message) || '';
+              if (isFetchGetterError(errMsg)) {
+                return true;
+              }
+              if (typeof prevOnError === 'function') {
+                return prevOnError.apply(this, arguments);
+              }
+            };
+
+            // 2. Ensure FormData has keys/entries/values so polyfills never attempt monkey-patching
+            if (window.FormData && !window.FormData.prototype.keys) {
+              window.FormData.prototype.keys = function*() {
+                var entries = this.entries ? this.entries() : [];
+                for (var e of entries) yield e[0];
+              };
+            }
+
+            // 3. Define getter + setter on window and prototype chain so assignment never throws
+            var nativeFetch = window.fetch ? window.fetch.bind(window) : undefined;
+            if (nativeFetch) {
+              var activeFetch = nativeFetch;
+              // Try prototype chain first
+              var proto = window;
+              while (proto) {
+                var desc = Object.getOwnPropertyDescriptor(proto, 'fetch');
+                if (desc) {
+                  if (!desc.set) {
+                    try {
+                      Object.defineProperty(proto, 'fetch', {
+                        get: function() { return activeFetch; },
+                        set: function(fn) { activeFetch = fn; },
+                        configurable: true,
+                        enumerable: desc.enumerable !== undefined ? desc.enumerable : true
+                      });
+                    } catch (e1) {}
+                  }
+                  break;
+                }
+                proto = Object.getPrototypeOf(proto);
+              }
+
+              // Also define on window directly
+              try {
+                Object.defineProperty(window, 'fetch', {
+                  get: function() { return activeFetch; },
+                  set: function(fn) { activeFetch = fn; },
+                  configurable: true,
+                  enumerable: true
+                });
+              } catch (e2) {}
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#090A0F] text-slate-100 antialiased selection:bg-[#D8FF65] selection:text-black min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
