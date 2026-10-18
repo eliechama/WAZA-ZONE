@@ -1,11 +1,20 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useProject } from '../../context/ProjectContext';
-import { Zap, Bell, Shield, Sparkles, BookOpen, Layers } from 'lucide-react';
+import { useShortcuts } from '../../context/ShortcutContext';
+import { Zap, Bell, Shield, Sparkles, BookOpen, Layers, User, Search, Keyboard, Command } from 'lucide-react';
+import { UserProfileSettingsModal } from '../profile/UserProfileSettingsModal';
 
 export const Navbar: React.FC<{ onNavigateToLanding?: () => void }> = ({ onNavigateToLanding }) => {
   const { user, workspace } = useAuth();
   const { activeProject, setActiveView } = useProject();
+  const {
+    setIsPaletteOpen,
+    setIsCheatSheetOpen,
+    isProfileOpen,
+    openProfile,
+    closeProfile
+  } = useShortcuts();
 
   return (
     <header className="h-14 bg-[#090A0F]/90 backdrop-blur-md border-b border-[#1E2230] px-4 flex items-center justify-between sticky top-0 z-40 text-xs font-mono">
@@ -44,8 +53,20 @@ export const Navbar: React.FC<{ onNavigateToLanding?: () => void }> = ({ onNavig
         </div>
       </div>
 
-      {/* Middle section: Quick Action Pills */}
+      {/* Middle section: Quick Action Pills & Shortcuts Command */}
       <div className="hidden lg:flex items-center space-x-3">
+        <button
+          onClick={() => setIsPaletteOpen(true)}
+          className="flex items-center space-x-2 text-slate-300 hover:text-white px-2.5 py-1 rounded bg-[#11131A] border border-[#1E2230] hover:border-[#D8FF65]/50 transition-all cursor-pointer group"
+          title="Open Command Palette (⌘K)"
+        >
+          <Search className="w-3.5 h-3.5 text-[#D8FF65]" />
+          <span className="text-slate-300">Navigator</span>
+          <kbd className="px-1.5 py-0.2 rounded bg-[#161922] border border-[#2A2E3D] text-[10px] text-slate-400 font-mono group-hover:text-[#D8FF65]">
+            ⌘K
+          </kbd>
+        </button>
+
         <button
           onClick={() => setActiveView('reader')}
           className="flex items-center space-x-1.5 text-slate-300 hover:text-white px-2.5 py-1 rounded bg-[#11131A] border border-[#1E2230] hover:border-[#9D78FF]/50 transition-all cursor-pointer"
@@ -64,12 +85,21 @@ export const Navbar: React.FC<{ onNavigateToLanding?: () => void }> = ({ onNavig
       </div>
 
       {/* Right section: Model Readiness, Ledger Balance & User Menu */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2 sm:space-x-3">
         {/* Model Status */}
         <div className="hidden md:flex items-center space-x-1.5 bg-[#11131A] border border-[#1E2230] px-2.5 py-1 rounded">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           <span className="text-slate-300">Gemini 2.0 / 3.1 Ready</span>
         </div>
+
+        {/* Cheatsheet Button */}
+        <button
+          onClick={() => setIsCheatSheetOpen(true)}
+          className="p-1.5 rounded bg-[#11131A] border border-[#1E2230] text-slate-400 hover:text-white hover:border-[#D8FF65]/40 transition-colors cursor-pointer group"
+          title="Keyboard Shortcuts Cheatsheet (?)"
+        >
+          <Keyboard className="w-4 h-4 group-hover:text-[#D8FF65]" />
+        </button>
 
         {/* Credit Balance Badge */}
         <button
@@ -88,17 +118,35 @@ export const Navbar: React.FC<{ onNavigateToLanding?: () => void }> = ({ onNavig
         </button>
 
         {/* User Profile */}
-        <div className="flex items-center space-x-2 pl-2 border-l border-[#1E2230]">
+        <button
+          onClick={openProfile}
+          className="flex items-center space-x-2 pl-2 border-l border-[#1E2230] hover:opacity-85 transition-opacity cursor-pointer group"
+          title="Open User Profile & Account Settings (⌥P)"
+        >
           <img
             src={user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
             alt="User"
-            className="w-7 h-7 rounded-full border border-[#9D78FF]/50 object-cover"
+            className="w-7 h-7 rounded-full border border-[#9D78FF]/50 object-cover group-hover:border-[#D8FF65] transition-colors"
           />
-          <span className="bg-[#1E2230] text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider">
+          <div className="hidden sm:flex flex-col text-left">
+            <span className="text-[11px] font-sans font-bold text-white leading-tight truncate max-w-[100px]">
+              {user?.fullName || 'Kai Vance'}
+            </span>
+            <span className="text-[9px] font-mono text-slate-400">
+              {user?.role || 'OWNER'}
+            </span>
+          </div>
+          <span className="sm:hidden bg-[#1E2230] text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider">
             {user?.role || 'OWNER'}
           </span>
-        </div>
+        </button>
       </div>
+
+      {/* User Profile & Account Settings Modal */}
+      <UserProfileSettingsModal
+        isOpen={isProfileOpen}
+        onClose={closeProfile}
+      />
     </header>
   );
 };

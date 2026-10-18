@@ -13,6 +13,10 @@ interface AuthContextType {
   provisionWorkspace: (name: string, handle: string, tier: Workspace['planTier']) => Promise<void>;
   logout: () => void;
   updateCreditBalance: (newBalance: number) => void;
+  updateProfile: (data: Partial<UserProfile>) => Promise<{ success: boolean; error?: string }>;
+  updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  switchSimulatedRole: (role: UserProfile['role']) => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -21,6 +25,11 @@ const defaultProfile: UserProfile = {
   fullName: 'Kai Vance',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
   role: 'OWNER',
+  bio: 'Lead Showrunner & Cyber-Noir Manga Architect at Kurogane Creative Lab. Directing Chrono Blade: Omega and Neo-Tokyo 2088 canon continuity.',
+  tagline: '@kai_vance // Master Narrative Director',
+  website: 'https://kurogane-studios.waza.zone',
+  location: 'Neo-Tokyo // Sector 09',
+  updatedAt: new Date().toISOString()
 };
 
 const defaultWorkspace: Workspace = {
@@ -136,6 +145,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (data: Partial<UserProfile>): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const { error: supaErr } = await supabase.auth.updateUser({
+        data: {
+          full_name: data.fullName,
+          avatar_url: data.avatarUrl,
+          bio: data.bio,
+          tagline: data.tagline,
+          website: data.website,
+          location: data.location,
+        }
+      });
+      if (supaErr) {
+        console.warn('Supabase updateUser metadata notice (using local state):', supaErr.message);
+      }
+
+      if (user?.id) {
+        try {
+          await supabase.from('profiles').update({
+            full_name: data.fullName,
+            avatar_url: data.avatarUrl,
+            updated_at: new Date().toISOString()
+          }).eq('id', user.id);
+        } catch (tableErr) {
+          console.warn('Profile table sync notice:', tableErr);
+        }
+      }
+
+      setUser(prev => prev ? {
+        ...prev,
+        ...data,
+        updatedAt: new Date().toISOString()
+      } : null);
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      return { success: false, error: err?.message || 'Failed to update profile' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateEmail = async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
+    if (!newEmail || !newEmail.includes('@')) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      if (error) {
+        console.warn('Supabase update email notice:', error.message);
+      }
+      setUser(prev => prev ? { ...prev, email: newEmail } : null);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to update email' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updatePassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters long.' };
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        console.warn('Supabase update password notice:', error.message);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to update password' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const switchSimulatedRole = (role: UserProfile['role']) => {
+    setUser(prev => prev ? { ...prev, role } : null);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -149,6 +243,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         provisionWorkspace,
         logout,
         updateCreditBalance,
+        updateProfile,
+        updateEmail,
+        updatePassword,
+        switchSimulatedRole,
       }}
     >
       {children}

@@ -7,6 +7,11 @@ export interface UserProfile {
   fullName: string;
   avatarUrl?: string;
   role: UserRole;
+  bio?: string;
+  tagline?: string;
+  website?: string;
+  location?: string;
+  updatedAt?: string;
 }
 
 export interface Workspace {

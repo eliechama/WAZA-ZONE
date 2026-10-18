@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { ProjectProvider, useProject } from './context/ProjectContext';
+import { ShortcutProvider } from './context/ShortcutContext';
 import { AppLayout } from './components/layout/AppLayout';
 
 import { LandingPage } from './pages/LandingPage';
@@ -15,6 +16,8 @@ import { ExportPublish } from './pages/ExportPublish';
 import { BillingPage } from './pages/BillingPage';
 import { AdminConsole } from './pages/AdminConsole';
 import { PublicReaderShowcase } from './pages/PublicReaderShowcase';
+import { TelemetryLogs } from './pages/TelemetryLogs';
+import { SettingsGateway } from './pages/SettingsGateway';
 
 function MainAppContent() {
   const { activeView, setActiveView } = useProject();
@@ -58,6 +61,10 @@ function MainAppContent() {
         return <BillingPage />;
       case 'admin':
         return <AdminConsole />;
+      case 'telemetry':
+        return <TelemetryLogs />;
+      case 'settings':
+        return <SettingsGateway />;
       default:
         return <ProjectCockpit />;
     }
@@ -74,7 +81,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ProjectProvider>
-        <MainAppContent />
+        <ShortcutProvider>
+          <MainAppContent />
+        </ShortcutProvider>
       </ProjectProvider>
     </AuthProvider>
   );

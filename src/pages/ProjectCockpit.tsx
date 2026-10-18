@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useProject } from '../context/ProjectContext';
-import { FormatType, Project } from '../types';
-import { Badge } from '../components/common/Badge';
-import { Modal } from '../components/common/Modal';
+import { Project } from '../types';
 import {
   Plus,
   FolderKanban,
@@ -39,31 +37,11 @@ import cover2Img from '../assets/images/waza_cockpit_cover_2_1790674802349.jpg';
 import cover3Img from '../assets/images/waza_cockpit_cover_3_1790674818706.jpg';
 import cover4Img from '../assets/images/waza_cockpit_cover_4_1790674833799.jpg';
 
+import { useShortcuts } from '../context/ShortcutContext';
+
 export const ProjectCockpit: React.FC = () => {
-  const { setActiveProject, createProject, setActiveView } = useProject();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // New Project Form
-  const [newTitle, setNewTitle] = useState('');
-  const [newFormat, setNewFormat] = useState<FormatType>('MANGA');
-  const [newDescription, setNewDescription] = useState('');
-  const [newCover, setNewCover] = useState('https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80');
-
-  const handleCreateProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-
-    createProject({
-      title: newTitle,
-      format: newFormat,
-      description: newDescription,
-      coverImage: newCover
-    });
-
-    setNewTitle('');
-    setNewDescription('');
-    setIsModalOpen(false);
-  };
+  const { setActiveProject, setActiveView } = useProject();
+  const { openWizard } = useShortcuts();
 
   return (
     <div className="space-y-8 font-sans selection:bg-[#D8FF65] selection:text-[#06070B]">
@@ -126,8 +104,8 @@ export const ProjectCockpit: React.FC = () => {
               <span>Import Comic Script</span>
             </button>
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-5 py-2.5 rounded-xl bg-[#D8FF65] text-[#06070B] font-extrabold text-xs font-mono hover:bg-[#cbf54f] shadow-lg shadow-[#D8FF65]/20 transition-all flex items-center gap-2"
+              onClick={openWizard}
+              className="px-5 py-2.5 rounded-xl bg-[#D8FF65] text-[#06070B] font-extrabold text-xs font-mono hover:bg-[#cbf54f] shadow-lg shadow-[#D8FF65]/20 transition-all flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>+ Create New Project</span>
@@ -498,8 +476,8 @@ export const ProjectCockpit: React.FC = () => {
             </div>
 
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="w-full py-3 rounded-xl bg-[#06070B] border border-slate-700 hover:border-[#D8FF65] text-white font-mono font-bold text-xs transition-all flex items-center justify-center gap-2"
+              onClick={openWizard}
+              className="w-full py-3 rounded-xl bg-[#06070B] border border-slate-700 hover:border-[#D8FF65] text-white font-mono font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Launch Project Genesis Wizard</span>
             </button>
@@ -707,90 +685,6 @@ export const ProjectCockpit: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* New Project Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Launch New Story Canon Project"
-        subtitle="Configure format parameters, canvas geometry, and initial narrative blueprint."
-      >
-        <form onSubmit={handleCreateProject} className="space-y-4">
-          <div>
-            <label className="block text-xs font-mono text-slate-400 mb-1">CANON TITLE *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. CYBER-RONIN 2099"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              className="w-full bg-[#06070B] border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#D8FF65]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-slate-400 mb-1">FORMAT & PUBLICATION LAYOUT *</label>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { id: 'MANGA', label: 'Manga B&W + Screentone', desc: 'Shonen/Seinen right-to-left' },
-                { id: 'WEBTOON', label: 'Korean Webtoon Vertical', desc: 'Continuous mobile scroll' },
-                { id: 'COMIC', label: 'US Comic Book', desc: '22-page standard color' },
-                { id: 'FRANCO_BELGE', label: 'Franco-Belge Album', desc: 'High detail 48-page' }
-              ].map((fmt) => (
-                <div
-                  key={fmt.id}
-                  onClick={() => setNewFormat(fmt.id as FormatType)}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    newFormat === fmt.id
-                      ? 'border-[#D8FF65] bg-[#D8FF65]/10 text-white'
-                      : 'border-slate-800 bg-[#06070B] text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="text-xs font-bold text-white">{fmt.label}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{fmt.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-slate-400 mb-1">CANON LOGLINE / PITCH</label>
-            <textarea
-              rows={2}
-              placeholder="High-level narrative logline..."
-              value={newDescription}
-              onChange={(e) => setNewDescription(e.target.value)}
-              className="w-full bg-[#06070B] border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#D8FF65]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-slate-400 mb-1">COVER ARTWORK URL</label>
-            <input
-              type="text"
-              value={newCover}
-              onChange={(e) => setNewCover(e.target.value)}
-              className="w-full bg-[#06070B] border border-slate-800 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#D8FF65]"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2.5 rounded-xl bg-[#D8FF65] text-[#06070B] font-extrabold text-xs font-mono hover:bg-[#cbf54f] transition-all"
-            >
-              Bootstrap Canon Project
-            </button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 };
