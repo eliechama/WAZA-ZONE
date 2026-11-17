@@ -231,7 +231,7 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
   plan_id TEXT NOT NULL REFERENCES public.plans(id),
-  provider TEXT NOT NULL CHECK (provider IN ('STRIPE', 'MONEROO', 'CHARIOW')),
+  provider TEXT NOT NULL CHECK (provider IN ('SASPAY', 'SYSTEM_GRANT')),
   status TEXT NOT NULL DEFAULT 'ACTIVE',
   current_period_end TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

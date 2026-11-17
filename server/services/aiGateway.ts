@@ -24,10 +24,14 @@ export class AIGateway {
    * Generates structured story plan with acts, episodes, and scenes using Gemini text model.
    */
   public static async generateStoryPlan(input: StoryPlanRequest): Promise<StoryPlan> {
-    const ai = this.getClient();
-    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const hasLiveKey = Boolean(apiKey && apiKey !== 'MOCK_KEY' && apiKey !== 'MY_GEMINI_API_KEY');
 
-    const prompt = `You are a master manga/webtoon narrative architect for WAZA-ZONE OS.
+    if (hasLiveKey) {
+      const ai = this.getClient();
+      const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
+
+      const prompt = `You are a master manga/webtoon narrative architect for WAZA-ZONE OS.
 Create a structured story plan for a project with the following parameters:
 Title: ${input.title}
 Genre: ${input.genre}
@@ -63,21 +67,22 @@ Return a valid JSON object matching this structure:
   ]
 }`;
 
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          systemInstruction: 'You are an elite serialized story director specializing in Japanese Manga, Korean Webtoon, and Western Graphic Novels.',
-        },
-      });
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            systemInstruction: 'You are an elite serialized story director specializing in Japanese Manga, Korean Webtoon, and Western Graphic Novels.',
+          },
+        });
 
-      if (response.text) {
-        return JSON.parse(response.text.trim()) as StoryPlan;
+        if (response.text) {
+          return JSON.parse(response.text.trim()) as StoryPlan;
+        }
+      } catch (err) {
+        console.warn('AI Story Plan fallback engaged:', err);
       }
-    } catch (err) {
-      console.warn('AI Story Plan fallback engaged:', err);
     }
 
     // Fallback structured data if API key not available in sandbox
@@ -110,27 +115,32 @@ Return a valid JSON object matching this structure:
    * Generates granular scene beat breakdown.
    */
   public static async generateSceneBeats(input: SceneBeatRequest): Promise<SceneBeat[]> {
-    const ai = this.getClient();
-    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const hasLiveKey = Boolean(apiKey && apiKey !== 'MOCK_KEY' && apiKey !== 'MY_GEMINI_API_KEY');
 
-    const prompt = `Break down scene "${input.sceneTitle}" at "${input.locationName}" into 6 high-tension manga beats.
+    if (hasLiveKey) {
+      const ai = this.getClient();
+      const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
+
+      const prompt = `Break down scene "${input.sceneTitle}" at "${input.locationName}" into 6 high-tension manga beats.
 Characters present: ${input.charactersInScene.join(', ')}
 Dramatic Objective: ${input.dramaticObjective}
 
 Return JSON array of beat objects with fields: beatNumber, type, cameraShot, description, dialogue (speaker, line, sfx), suggestedPanelsCount.`;
 
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: { responseMimeType: 'application/json' },
-      });
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        });
 
-      if (response.text) {
-        return JSON.parse(response.text.trim()) as SceneBeat[];
+        if (response.text) {
+          return JSON.parse(response.text.trim()) as SceneBeat[];
+        }
+      } catch (err) {
+        console.warn('AI Scene Beats fallback engaged:', err);
       }
-    } catch (err) {
-      console.warn('AI Scene Beats fallback engaged:', err);
     }
 
     return [
@@ -182,33 +192,38 @@ Return JSON array of beat objects with fields: beatNumber, type, cameraShot, des
 
     const fullPrompt = ContinuityService.formatPromptWithContinuity(req.prompt, packet);
 
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: {
-          parts: [{ text: fullPrompt }],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: req.aspectRatio || '1:1',
-            imageSize: '1K',
-          },
-        },
-      });
+    const apiKey = process.env.GEMINI_API_KEY;
+    const hasLiveKey = Boolean(apiKey && apiKey !== 'MOCK_KEY' && apiKey !== 'MY_GEMINI_API_KEY');
 
-      if (response.candidates?.[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData?.data) {
-            return {
-              assetUrl: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
-              seedUsed: packet.seedLock,
-              promptUsed: fullPrompt,
-            };
+    if (hasLiveKey) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: {
+            parts: [{ text: fullPrompt }],
+          },
+          config: {
+            imageConfig: {
+              aspectRatio: req.aspectRatio || '1:1',
+              imageSize: '1K',
+            },
+          },
+        });
+
+        if (response.candidates?.[0]?.content?.parts) {
+          for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData?.data) {
+              return {
+                assetUrl: `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`,
+                seedUsed: packet.seedLock,
+                promptUsed: fullPrompt,
+              };
+            }
           }
         }
+      } catch (err) {
+        console.warn('AI Image Generation fallback engaged:', err);
       }
-    } catch (err) {
-      console.warn('AI Image Generation fallback engaged:', err);
     }
 
     // High quality curated SVG/Asset placeholder matching the WAZA-ZONE aesthetic if API key is in sandbox mode
@@ -223,28 +238,33 @@ Return JSON array of beat objects with fields: beatNumber, type, cameraShot, des
    * Multilingual translation service with glossary locks and overflow guards.
    */
   public static async translate(text: string, targetLocale: string, glossary: Record<string, string>): Promise<{ translatedText: string; overflowRisk: boolean }> {
-    const ai = this.getClient();
-    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
+    const apiKey = process.env.GEMINI_API_KEY;
+    const hasLiveKey = Boolean(apiKey && apiKey !== 'MOCK_KEY' && apiKey !== 'MY_GEMINI_API_KEY');
 
-    const prompt = `Translate comic dialogue from English to ${targetLocale}.
+    if (hasLiveKey) {
+      const ai = this.getClient();
+      const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
+
+      const prompt = `Translate comic dialogue from English to ${targetLocale}.
 Strictly respect this locked glossary (do NOT translate these terms literally):
 ${JSON.stringify(glossary, null, 2)}
 
 Original Text: "${text}"
 Return JSON: { "translatedText": "...", "overflowRisk": false }`;
 
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: { responseMimeType: 'application/json' },
-      });
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        });
 
-      if (response.text) {
-        return JSON.parse(response.text.trim());
+        if (response.text) {
+          return JSON.parse(response.text.trim());
+        }
+      } catch (err) {
+        console.warn('AI Translation fallback engaged:', err);
       }
-    } catch (err) {
-      console.warn('AI Translation fallback engaged:', err);
     }
 
     const mockTranslations: Record<string, string> = {

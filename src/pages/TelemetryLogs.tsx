@@ -78,7 +78,7 @@ export const TelemetryLogs: React.FC = () => {
       timestamp: '2025-02-23T14:02:14.004Z',
       level: 'INFO',
       event: 'LEDGER_INIT',
-      payload: { model: 'APPEND_ONLY', active_gateways: ['stripe', 'moneroo'] }
+      payload: { model: 'APPEND_ONLY', active_gateway: 'saspay_v1', channels: ['mtn', 'orange', 'moov', 'wave', 'card'] }
     },
     {
       id: 'log-6',
@@ -474,14 +474,11 @@ export const TelemetryLogs: React.FC = () => {
               </h3>
             </div>
             <div className="flex items-center gap-1.5 text-[9px] font-mono font-bold">
-              <span className="px-1.5 py-0.5 rounded bg-[#181D29] text-[#4FACFE] border border-[#2B3B59]">
-                STRIPE
-              </span>
               <span className="px-1.5 py-0.5 rounded bg-[#10202F] text-[#68E7FF] border border-[#1E3A5F]">
-                MONEROO
+                SASPAY.ME
               </span>
               <span className="px-1.5 py-0.5 rounded bg-[#14231E] text-[#38EF7D] border border-[#1E5037]">
-                CHARIOW
+                MOBILE MONEY & CARDS
               </span>
             </div>
           </div>
@@ -633,8 +630,8 @@ export const TelemetryLogs: React.FC = () => {
               },
               {
                 id: 8,
-                title: '8. Tri-Gateway Billing Routing',
-                desc: 'Stripe + Moneroo + Chariow connectors'
+                title: '8. SasPay.me Billing Rails',
+                desc: 'OpenAPI 3.1.0 Mobile Money & Card Gateway'
               },
               {
                 id: 9,

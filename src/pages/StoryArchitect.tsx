@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useProject } from '../context/ProjectContext';
+import { ApiClient } from '../lib/api';
 import {
   FileText,
   Sparkles,
@@ -185,11 +186,20 @@ export const StoryArchitect: React.FC = () => {
     setGuardrails((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleRegenerateBeats = () => {
+  const handleRegenerateBeats = async () => {
     setIsRegenerating(true);
-    setTimeout(() => {
+    try {
+      await ApiClient.generateSceneBeats({
+        sceneTitle: 'Shibuya Rooftop Ambush',
+        locationName: 'Shibuya Under-Helipad Sub-09',
+        charactersInScene: ['Ren Kurogane', 'Aoi Vance', 'Vesper-09'],
+        dramaticObjective: 'Neutralize Vesper-09 before neural canister is purged'
+      });
+    } catch (e) {
+      console.warn('Scene beats API fallback:', e);
+    } finally {
       setIsRegenerating(false);
-    }, 1200);
+    }
   };
 
   const handleRefineDialogue = () => {
