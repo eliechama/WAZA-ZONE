@@ -1,4 +1,5 @@
 import { LedgerEntry } from '../types.js';
+import { WorkspaceMutex } from './ledgerLock.js';
 
 interface WorkspaceBalance {
   workspaceId: string;
@@ -9,6 +10,7 @@ interface WorkspaceBalance {
 /**
  * Append-Only Immutable Credit Ledger Service.
  * Ensures zero double-spends and transactional credit reservation/settlement.
+ * Backed by WorkspaceMutex and SasPay payment rails.
  */
 export class CreditLedgerService {
   private static balances: Map<string, WorkspaceBalance> = new Map([
@@ -57,8 +59,8 @@ export class CreditLedgerService {
       amount: 5000,
       balanceAfter: 4854,
       jobId: undefined,
-      description: 'Stripe Checkout Inv #INV-2025-084 ($69.00 USD)',
-      idempotencySignature: 'cs_live_b123_top',
+      description: 'SasPay Checkout Inv #INV-2025-084 (39,000 XAF)',
+      idempotencySignature: 'saspay_live_b123_top',
       createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
     },
   ];
@@ -78,6 +80,12 @@ export class CreditLedgerService {
    * Step 4: Atomic Reservation
    */
   public static reserveCredits(workspaceId: string, amount: number, jobId: string, idempotencyKey: string): LedgerEntry {
+    const idempotencySignature = `idemp_${idempotencyKey}_rsv`;
+    const existing = this.ledgerLogs.find((l) => l.idempotencySignature === idempotencySignature);
+    if (existing) {
+      return existing;
+    }
+
     const ws = this.getBalance(workspaceId);
     if (ws.balance - ws.reserved < amount) {
       throw new Error(`Insufficient credit balance. Required: ${amount}, Available: ${ws.balance - ws.reserved}`);
@@ -92,7 +100,7 @@ export class CreditLedgerService {
       balanceAfter: ws.balance - ws.reserved,
       jobId,
       description: `Job ${jobId} Credit Reservation`,
-      idempotencySignature: `idemp_${idempotencyKey}_rsv`,
+      idempotencySignature,
       createdAt: new Date().toISOString(),
     };
 
@@ -104,6 +112,12 @@ export class CreditLedgerService {
    * Step 8: Settlement
    */
   public static settleCredits(workspaceId: string, reservedAmount: number, actualAmount: number, jobId: string, idempotencyKey: string): LedgerEntry {
+    const idempotencySignature = `idemp_${idempotencyKey}_stl`;
+    const existing = this.ledgerLogs.find((l) => l.idempotencySignature === idempotencySignature);
+    if (existing) {
+      return existing;
+    }
+
     const ws = this.getBalance(workspaceId);
     ws.reserved = Math.max(0, ws.reserved - reservedAmount);
     ws.balance = Math.max(0, ws.balance - actualAmount);
@@ -116,7 +130,7 @@ export class CreditLedgerService {
       balanceAfter: ws.balance,
       jobId,
       description: `Job ${jobId} Final Settlement (${actualAmount} CR)`,
-      idempotencySignature: `idemp_${idempotencyKey}_stl`,
+      idempotencySignature,
       createdAt: new Date().toISOString(),
     };
 
@@ -148,9 +162,9 @@ export class CreditLedgerService {
   }
 
   /**
-   * Add-on recharge
+   * Add-on recharge via SasPay or admin grant
    */
-  public static rechargeCredits(workspaceId: string, amount: number, paymentRef: string, provider: 'STRIPE' | 'MONEROO' | 'CHARIOW'): LedgerEntry {
+  public static rechargeCredits(workspaceId: string, amount: number, paymentRef: string, provider: 'SASPAY' | 'SYSTEM_GRANT' = 'SASPAY'): LedgerEntry {
     const ws = this.getBalance(workspaceId);
     ws.balance += amount;
 

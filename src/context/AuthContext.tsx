@@ -50,18 +50,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check Supabase session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || 'user@waza.zone',
-          fullName: session.user.user_metadata?.full_name || 'Studio Member',
-          avatarUrl: session.user.user_metadata?.avatar_url,
-          role: 'OWNER',
-        });
-      }
-    });
+    // Check Supabase session with resilient error handling
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (data?.session?.user) {
+          setUser({
+            id: data.session.user.id,
+            email: data.session.user.email || 'user@waza.zone',
+            fullName: data.session.user.user_metadata?.full_name || 'Studio Member',
+            avatarUrl: data.session.user.user_metadata?.avatar_url,
+            role: 'OWNER',
+          });
+        }
+      })
+      .catch((err) => {
+        console.debug('Supabase session initialization skipped (offline/demo mode):', err);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {

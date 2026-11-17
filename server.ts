@@ -6,6 +6,11 @@ import { fileURLToPath } from 'url';
 import { AIGateway } from './server/services/aiGateway.js';
 import { CreditLedgerService } from './server/services/ledger.js';
 import { ContinuityService } from './server/services/continuity.js';
+import { SasPayService } from './server/services/saspay.js';
+import { WebhookValidator } from './server/services/webhookValidator.js';
+import { AdminService } from './server/services/adminService.js';
+import { rateLimiter } from './server/middleware/rateLimiter.js';
+import { WorkspaceMutex } from './server/services/ledgerLock.js';
 
 dotenv.config();
 
@@ -15,7 +20,30 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json({ limit: '10mb' }));
+// Raw body capture for webhook signature verification
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString();
+    },
+  })
+);
+
+// CORS & Security Headers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Idempotency-Key, X-Webhook-Signature, X-Webhook-Timestamp');
+  res.header('X-Content-Type-Options', 'nosniff');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Token Bucket Rate Limiting Guard on API
+app.use('/api/', rateLimiter);
 
 // -----------------------------------------------------------------------------
 // 1. HEALTH & READINESS PROBES (Requirement: Docker / Dokploy / Production SRE)
@@ -48,7 +76,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
     },
     finops_ledger: {
       mode: 'APPEND_ONLY_DOUBLE_ENTRY',
-      tri_gateway: ['Stripe', 'Moneroo', 'Chariow'],
+      payment_gateway: 'SasPay.me API v1 (Mobile Money & Card Rails)',
+      supported_channels: ['MTN Mobile Money', 'Orange Money', 'Moov Money', 'Wave', 'Carte Bancaire'],
+      currency: 'XAF / XOF',
     },
   });
 });
@@ -256,34 +286,38 @@ app.post('/api/ai/generate-panel', async (req: Request, res: Response) => {
   const estimatedCredits = 12;
 
   try {
-    // 1. Reserve credits transactionally
-    const reserveTx = CreditLedgerService.reserveCredits(workspaceId, estimatedCredits, `job_${Date.now()}`, idempotencyKey);
+    const outcome = await WorkspaceMutex.runExclusive(workspaceId, async () => {
+      // 1. Reserve credits transactionally
+      const reserveTx = CreditLedgerService.reserveCredits(workspaceId, estimatedCredits, `job_${Date.now()}`, idempotencyKey);
 
-    // 2. Execute server-side Gemini AI generation with Continuity Packet Injection
-    const result = await AIGateway.generatePanel({
-      workspaceId,
-      projectId,
-      characterIds,
-      sceneId,
-      panelNumber,
-      prompt: prompt || 'Ren Kurogane executing lightning-fast iaijutsu strike in pouring neon rain, 35mm low angle',
-      idempotencyKey,
+      // 2. Execute server-side Gemini AI generation with Continuity Packet Injection
+      const result = await AIGateway.generatePanel({
+        workspaceId,
+        projectId,
+        characterIds,
+        sceneId,
+        panelNumber,
+        prompt: prompt || 'Ren Kurogane executing lightning-fast iaijutsu strike in pouring neon rain, 35mm low angle',
+        idempotencyKey,
+      });
+
+      // 3. Settle actual credits
+      const settleTx = CreditLedgerService.settleCredits(workspaceId, estimatedCredits, estimatedCredits, `job_${Date.now()}`, idempotencyKey);
+
+      return { result, reserveTx, settleTx };
     });
-
-    // 3. Settle actual credits
-    const settleTx = CreditLedgerService.settleCredits(workspaceId, estimatedCredits, estimatedCredits, `job_${Date.now()}`, idempotencyKey);
 
     res.json({
       success: true,
-      assetUrl: result.assetUrl,
-      seedUsed: result.seedUsed,
-      promptUsed: result.promptUsed,
+      assetUrl: outcome.result.assetUrl,
+      seedUsed: outcome.result.seedUsed,
+      promptUsed: outcome.result.promptUsed,
       continuityPacket: ContinuityService.buildPacket({ projectId, characterId: characterIds[0] }),
       ledger: {
-        reserveTxId: reserveTx.id,
-        settleTxId: settleTx.id,
+        reserveTxId: outcome.reserveTx.id,
+        settleTxId: outcome.settleTx.id,
         creditsDeducted: estimatedCredits,
-        remainingBalance: settleTx.balanceAfter,
+        remainingBalance: outcome.settleTx.balanceAfter,
       },
     });
   } catch (err: any) {
@@ -323,18 +357,18 @@ app.get('/api/billing/ledger', (req: Request, res: Response) => {
 });
 
 app.post('/api/billing/recharge', (req: Request, res: Response) => {
-  const { workspaceId = 'ws_kurogane_01', packId = 'pack_2500', provider = 'STRIPE' } = req.body;
+  const { workspaceId = 'ws_kurogane_01', packId = 'pack_2500', provider = 'SASPAY' } = req.body;
 
-  const packRates: Record<string, { credits: number; priceUsd: number }> = {
-    pack_500: { credits: 500, priceUsd: 9 },
-    pack_2500: { credits: 2500, priceUsd: 39 },
-    pack_10000: { credits: 10000, priceUsd: 129 },
+  const packRates: Record<string, { credits: number; priceXaf: number }> = {
+    pack_500: { credits: 500, priceXaf: 5500 },
+    pack_2500: { credits: 2500, priceXaf: 24000 },
+    pack_10000: { credits: 10000, priceXaf: 80000 },
   };
 
   const pack = packRates[packId] || packRates['pack_2500'];
-  const paymentRef = `inv_${Math.random().toString(36).substring(2, 10)}`;
+  const paymentRef = `sas_inv_${Math.random().toString(36).substring(2, 10)}`;
 
-  const tx = CreditLedgerService.rechargeCredits(workspaceId, pack.credits, paymentRef, provider);
+  const tx = CreditLedgerService.rechargeCredits(workspaceId, pack.credits, paymentRef, provider as any);
 
   res.json({
     success: true,
@@ -346,7 +380,180 @@ app.post('/api/billing/recharge', (req: Request, res: Response) => {
 });
 
 // -----------------------------------------------------------------------------
-// 9. VITE DEV SERVER MOUNT / STATIC PROD SERVING
+// 9. SASPAY.ME PAYMENT GATEWAY API (OpenAPI 3.1.0 Compliant)
+// -----------------------------------------------------------------------------
+app.post('/api/payments/saspay/checkout', async (req: Request, res: Response) => {
+  try {
+    const { amount = '2500.00', currency = 'XAF', description = 'WAZA-ZONE Studio Pack', customer, metadata } = req.body;
+    const session = await SasPayService.createCheckoutSession({
+      amount: SasPayService.formatAmount(amount),
+      currency,
+      description,
+      customer,
+      metadata,
+    });
+    res.json(session);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to create SasPay checkout session' });
+  }
+});
+
+app.post('/api/payments/saspay/softpay', async (req: Request, res: Response) => {
+  try {
+    const { amount = '2500.00', currency = 'XAF', country = 'CM', phone, network, description, metadata, idempotencyKey } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required for mobile money payment' });
+    }
+
+    const softpay = await SasPayService.createSoftpay({
+      amount: SasPayService.formatAmount(amount),
+      currency,
+      country,
+      phone,
+      network,
+      description: description || 'WAZA-ZONE Studio Addon',
+      metadata,
+      idempotencyKey,
+    });
+    res.json(softpay);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Softpay initiation failed' });
+  }
+});
+
+app.get('/api/payments/saspay/verify/:paymentId', async (req: Request, res: Response) => {
+  try {
+    const { paymentId } = req.params;
+    const verification = await SasPayService.verifyPayment(paymentId);
+    
+    // Delivery ONLY if SUCCESS
+    if (verification.status === 'SUCCESS') {
+      const workspaceId = (verification.metadata?.workspace_id as string) || 'ws_kurogane_01';
+      const credits = parseInt(verification.metadata?.credits || '2500', 10);
+      CreditLedgerService.rechargeCredits(workspaceId, credits, paymentId, 'SASPAY');
+    }
+
+    res.json(verification);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Verification failed' });
+  }
+});
+
+// SasPay Webhook Endpoint with HMAC SHA-256 and 300s Timestamp Replay Guard
+app.post('/api/webhooks/payments/saspay', (req: any, res: Response) => {
+  const signature = req.headers['x-webhook-signature'] as string;
+  const timestamp = req.headers['x-webhook-timestamp'] as string;
+  const secret = process.env.SASPAY_WEBHOOK_SECRET || 'whsec_test_demo_secret';
+
+  const rawBody = req.rawBody || JSON.stringify(req.body);
+  const verifyResult = WebhookValidator.verifySasPayWebhook(rawBody, signature, timestamp, secret);
+
+  if (!verifyResult.valid) {
+    console.warn('[SasPay Webhook] Security rejection:', verifyResult.reason);
+    return res.status(401).json({ error: 'WEBHOOK_UNAUTHORIZED', reason: verifyResult.reason });
+  }
+
+  const payload = req.body;
+  if (payload.event === 'payment.success' && payload.data?.status === 'SUCCESS') {
+    const workspaceId = payload.data.metadata?.workspace_id || 'ws_kurogane_01';
+    const credits = parseInt(payload.data.metadata?.credits || '2500', 10);
+    CreditLedgerService.rechargeCredits(workspaceId, credits, payload.data.id, 'SASPAY');
+  }
+
+  res.status(200).json({ received: true });
+});
+
+// -----------------------------------------------------------------------------
+// 10. ADMIN BACK-OFFICE API (Prompt Maître Invitiz / WAZA-ZONE OS Specs)
+// -----------------------------------------------------------------------------
+app.get('/api/admin/v1/dashboard', (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '30_DAYS';
+  res.json(AdminService.getDashboard(period));
+});
+
+app.get('/api/admin/v1/acquisition', (_req: Request, res: Response) => {
+  res.json(AdminService.getAcquisition());
+});
+
+app.get('/api/admin/v1/users', (req: Request, res: Response) => {
+  const search = (req.query.search as string) || '';
+  const status = (req.query.status as string) || 'ALL';
+  res.json(AdminService.getUsers(search, status));
+});
+
+app.post('/api/admin/v1/users/:id/status', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { reason = 'Action administrative', adminEmail = 'admin@waza.zone' } = req.body;
+  try {
+    const user = AdminService.toggleUserStatus(id, reason, adminEmail);
+    res.json(user);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/v1/events', (_req: Request, res: Response) => {
+  res.json(AdminService.getEvents());
+});
+
+app.get('/api/admin/v1/plans', (_req: Request, res: Response) => {
+  res.json(AdminService.getSubscriptions());
+});
+
+app.get('/api/admin/v1/payments/unmatched', (_req: Request, res: Response) => {
+  res.json(AdminService.getUnmatchedPayments());
+});
+
+app.post('/api/admin/v1/payments/:id/attach', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { userId, adminEmail = 'admin@waza.zone' } = req.body;
+  try {
+    const attached = AdminService.attachPayment(id, userId, adminEmail);
+    res.json(attached);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/v1/funnel', (_req: Request, res: Response) => {
+  res.json(AdminService.getCheckoutFunnel());
+});
+
+app.get('/api/admin/v1/influencers', (_req: Request, res: Response) => {
+  res.json(AdminService.getInfluencers());
+});
+
+app.get('/api/admin/v1/moderation', (_req: Request, res: Response) => {
+  res.json({
+    cases: AdminService.getModerationCases(),
+    pendingCount: AdminService.getPendingModerationCount(),
+  });
+});
+
+app.post('/api/admin/v1/moderation/:id/action', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { decision = 'RESOLVE', note = 'Traité par le modérateur', adminEmail = 'admin@waza.zone' } = req.body;
+  try {
+    const resolved = AdminService.resolveModerationCase(id, decision as any, note, adminEmail);
+    res.json(resolved);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/v1/audit', (_req: Request, res: Response) => {
+  res.json(AdminService.getAuditLogs());
+});
+
+// -----------------------------------------------------------------------------
+// 11. API FALLTHROUGH 404 (Avoids serving HTML on missing API routes)
+// -----------------------------------------------------------------------------
+app.all('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({ error: 'Endpoint not found', path: req.originalUrl });
+});
+
+// -----------------------------------------------------------------------------
+// 12. VITE DEV SERVER MOUNT / STATIC PROD SERVING
 // -----------------------------------------------------------------------------
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -389,11 +596,16 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  return app.listen(PORT, '0.0.0.0', () => {
     console.log(`⚡ [WAZA-ZONE OS v2.4] Core Server running at http://0.0.0.0:${PORT}`);
     console.log(`🛡️  Supabase PostgreSQL RLS: ENFORCED`);
     console.log(`🤖 Server-Side Gemini AI Gateway: READY`);
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+export { app, startServer };
+

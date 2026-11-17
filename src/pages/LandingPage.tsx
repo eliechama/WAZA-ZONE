@@ -612,7 +612,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onOpenRead
 
           {/* Payment Providers Line */}
           <div className="mt-12 p-4 bg-[#0E1017] rounded-xl border border-slate-800 text-center text-xs font-mono text-slate-400">
-            <span className="text-[#D8FF65] font-bold">⚡ Tri-Gateway Instant Checkout</span> • Frictionless payment globally supported via <strong className="text-white">Stripe</strong>, <strong className="text-white">Moneroo</strong> (All Africa Mobile Money: MTN, Orange, Moov), and <strong className="text-white">Chariow</strong>.
+            <span className="text-[#D8FF65] font-bold">⚡ SasPay.me Instant Checkout</span> • Paiement sécurisé en direct par <strong className="text-white">Mobile Money</strong> (MTN Bénin/Cameroun, Orange Money, Moov, Wave) et <strong className="text-white">Carte Bancaire</strong> via <strong className="text-[#68E7FF]">SASPAY.ME</strong>.
           </div>
         </div>
       </section>
@@ -748,7 +748,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onOpenRead
 
         <div className="max-w-6xl mx-auto pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-slate-500">
           <div>
-            Encrypted via Supabase Postgres RLS • Zero-Data-Leak Guarantee • Stripe / Moneroo / Chariow Verified
+            Encrypted via Supabase Postgres RLS • Zero-Data-Leak Guarantee • SasPay.me Verified Payment Gateway
           </div>
           <div>
             © 2026 WAZA-ZONE Technologies Inc. All rights reserved.
